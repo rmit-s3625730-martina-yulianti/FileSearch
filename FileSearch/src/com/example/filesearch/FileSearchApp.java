@@ -1,16 +1,24 @@
 package com.example.filesearch;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Pattern;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 public class FileSearchApp {
 	String path;
 	String regex;
 	String zipFileName;
+	Pattern pattern;
+	List<File> zipFiles = new ArrayList<File>();
 	
 	public static void main(String[] args) {
 		FileSearchApp app = new FileSearchApp();
@@ -33,13 +41,12 @@ public class FileSearchApp {
 		
 	}
 	
-	/*
-	public void walkDirectory(String path) {
-		System.out.println("walkDirectory: " + path);
-		searchFile(null);
-		addFileToZip(null);
+	
+	public void walkDirectory(String path) throws IOException {
+		walkDirectoryJava8(path);
+		zipFilesJava7();
 	}
-	*/
+	
 	
 	public void walkDirectoryJava8(String path) throws IOException {
 		Files.walk(Paths.get(path))
@@ -58,11 +65,48 @@ public class FileSearchApp {
 	}
 	
 	public boolean searchText(String text) {
-		return true;
+		return (this.getRegex() == null) ? true :
+			this.pattern.matcher(text).matches();
 	}
 	
 	public void addFileToZip(File file) {
-		System.out.println("addFileToZip: " + file);
+		if(getZipFileName() != null) {
+			zipFiles.add(file);
+		}
+	}
+	
+	public void zipFilesJava7() throws IOException {
+		try(ZipOutputStream out = 
+				new ZipOutputStream(new FileOutputStream(getZipFileName()))){
+			File baseDir = new File(getPath());
+			
+			
+			for (File file : zipFiles){
+				// fileName must be a relative path, not an absolute one.
+				String fileName = getRelativeFilename(file, baseDir);
+				
+				ZipEntry zipEntry = new ZipEntry(fileName);
+				zipEntry.setTime(file.lastModified());
+				out.putNextEntry(zipEntry);
+				
+				Files.copy(file.toPath(), out);
+				
+				out.closeEntry();
+			}
+			
+		}
+	}
+	
+	public String getRelativeFilename (File file, File baseDir) {
+		String filename = file.getAbsolutePath().substring(baseDir.getAbsolutePath().length());
+		
+		// Important: the zipEntry filename must use "/", not "\"
+		filename = filename.replace('\\', '/');
+		
+		while(filename.startsWith("/")) {
+			filename = filename.substring(1);
+		}
+		return filename;
 	}
 	
 	public void processFile(File file) {
@@ -91,6 +135,7 @@ public class FileSearchApp {
 
 	public void setRegex(String regex) {
 		this.regex = regex;
+		this.pattern = Pattern.compile(regex);
 	}
 
 	public String getZipFileName() {
